@@ -39,6 +39,10 @@ Notes:
 - Insert a corresponding row in public.profiles with role='admin' using the user_id from auth.users.
 - After that, create HR and Employee users similarly and insert their profile rows.
 
+Auto-create profiles on first login
+- If SUPABASE_SERVICE_ROLE_KEY is set, the backend will automatically create a default profile (role=employee, onboarding_complete=false) for any authenticated user missing a profile on their first request. This unblocks onboarding for first-time users.
+- For admin/HR, you should still promote their role via /users endpoints or manual SQL.
+
 5) Security
 - Keep .env out of version control.
 - Never commit real Supabase keys or JWT secrets.

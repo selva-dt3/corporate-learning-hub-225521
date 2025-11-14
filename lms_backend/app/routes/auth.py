@@ -104,3 +104,29 @@ class OnboardingCompleteAlias(MethodView):
         resp = supabase.table("profiles").update({"onboarding_complete": True}).eq("user_id", str(g.user_id)).execute()  # type: ignore
         data = resp.data[0] if resp.data else None
         return data or {}
+
+# Create a top-level alias blueprint to support POST /onboarding/complete without /auth prefix
+root_alias_blp = Blueprint(
+    "OnboardingAliasRoot",
+    "onboarding_alias_root",
+    url_prefix="/",
+    description="Root-level onboarding alias"
+)
+
+# PUBLIC_INTERFACE
+@root_alias_blp.route("/onboarding/complete")
+class RootOnboardingComplete(MethodView):
+    """Complete onboarding alias at root path for compatibility."""
+
+    @blp.response(200, ProfileSchema)
+    def post(self):
+        """Mark onboarding complete for current user (root alias)."""
+        if not getattr(g, "user_id", None):
+            return jsonify({"error": {"code": "AUTH_ERROR", "message": "Unauthorized"}}), 401
+        supabase = getattr(app, "supabase", None)
+        resp = supabase.table("profiles").update({"onboarding_complete": True}).eq("user_id", str(g.user_id)).execute()  # type: ignore
+        data = resp.data[0] if resp.data else None
+        return data or {}
+
+# Register the root alias blueprint through the auth group blueprint
+blp.register_blueprint(root_alias_blp)

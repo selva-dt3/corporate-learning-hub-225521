@@ -144,6 +144,7 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
     """
     Install before_request/after_request handlers:
     - Authenticate Bearer JWT and load profile from Supabase
+    - Auto-create a default profile on first login when using service role key
     - Attach g.user and g.role
     - Apply security headers and CORS preflight handling
     """
@@ -151,6 +152,7 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
     def authenticate():
         # Handle OPTIONS preflight early and return 200 with headers applied by flask-cors
         if request.method == "OPTIONS":
+            app.logger.debug("CORS preflight OPTIONS for path=%s", request.path)
             return make_response(("", 200))
 
         # Public routes: health, docs/openapi
@@ -163,33 +165,58 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
             # Allow only if route opts-out via attribute
             if getattr(app.view_functions.get(request.endpoint, None), "auth_optional", False):
                 return
+            app.logger.info("Auth missing Bearer token for path=%s", path)
             return jsonify({"error": {"code": "AUTH_ERROR", "message": "Missing Bearer token"}}), 401
 
         token = auth_header.replace("Bearer ", "").strip()
         claims = _jwt_decode(token, app)
         if not claims:
+            app.logger.info("Auth invalid token for path=%s", path)
             return jsonify({"error": {"code": "AUTH_ERROR", "message": "Invalid token"}}), 401
 
         # user id expected in 'sub' claim
         user_id = claims.get("sub")
         if not user_id:
+            app.logger.info("Auth token missing sub claim for path=%s", path)
             return jsonify({"error": {"code": "AUTH_ERROR", "message": "Invalid token: sub missing"}}), 401
 
         g.user_id = user_id
         g.user = {"id": user_id}
         g.role = None
 
-        # Fetch role and profile from profiles
+        # Fetch role and profile; if not present attempt creation (service role required)
         if supabase:
             try:
-                resp = supabase.table("profiles").select("*").eq("user_id", user_id).limit(1).execute()
+                resp = supabase.table("profiles").select("*").eq("user_id", user_id).limit(1).execute()  # type: ignore
                 if resp.data and len(resp.data) > 0:
                     profile = resp.data[0]
                     g.user["profile"] = profile
                     g.role = profile.get("role")
+                    app.logger.debug("Loaded profile for user_id=%s role=%s", user_id, g.role)
                 else:
-                    # No profile row; treat as unauthorized for protected routes
-                    g.role = None
+                    # Attempt auto-create a minimal profile when service role key is configured.
+                    # Default role: employee; onboarding incomplete.
+                    if app.config.get("SUPABASE_SERVICE_ROLE_KEY"):
+                        payload = {
+                            "user_id": user_id,
+                            "role": "employee",
+                            "onboarding_complete": False,
+                        }
+                        try:
+                            ins = supabase.table("profiles").insert(payload).execute()  # type: ignore
+                            created = ins.data[0] if ins.data else payload
+                            g.user["profile"] = created
+                            g.role = created.get("role")
+                            app.logger.info("Auto-created profile for user_id=%s with role=%s", user_id, g.role)
+                        except Exception as ie:
+                            app.logger.error("Auto-create profile failed for user_id=%s error=%s", user_id, ie)
+                            # Keep role None; downstream role_required will enforce access
+                    else:
+                        # Service role not configured; cannot auto-create due to RLS/policies
+                        app.logger.warning(
+                            "No SUPABASE_SERVICE_ROLE_KEY; cannot auto-create profile for user_id=%s", user_id
+                        )
+                        g.role = None
             except Exception as e:
                 app.logger.error(f"Supabase profile fetch failed: {e}")
 
