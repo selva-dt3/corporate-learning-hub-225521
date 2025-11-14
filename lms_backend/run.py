@@ -10,6 +10,6 @@ if __name__ == "__main__":
     """
     import os
 
-    port = int(os.getenv("PORT", "3001"))
+    port = int(os.getenv("PORT", "3011"))
     app = create_app()
     app.run(host="0.0.0.0", port=port)

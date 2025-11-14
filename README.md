@@ -18,7 +18,7 @@ The backend expects a Supabase instance for auth, database, and private storage.
   - SUPABASE_JWT_SECRET
   - FRONTEND_URL
   - CORS_ORIGINS
-  - PORT (default 3001)
+  - PORT (default 3011)
 
 3) Apply SQL in order
 Open the Supabase SQL editor (or use Supabase CLI) and run the SQL files in this exact order:
@@ -60,20 +60,21 @@ Run backend locally (example):
 - Create and populate lms_backend/.env (see .env.example)
 - python -m venv .venv && source .venv/bin/activate
 - pip install -r requirements.txt
-- python run.py  # serves on http://localhost:${PORT:-3001}
+- python run.py  # serves on http://localhost:${PORT:-3011}
 
 Port already in use?
-- If you see "Port 3001 is in use", another instance is already running (e.g., container or prior process).
-  - Either stop the other process or set a different PORT in lms_backend/.env (e.g., PORT=3010) before running.
-  - In production, use a WSGI server: e.g., `gunicorn -w 2 -b 0.0.0.0:${PORT:-3001} wsgi:application`
+- If you see "Port 3011 is in use", another instance is already running (e.g., container or prior process).
+  - Either stop the other process or set a different PORT in lms_backend/.env (e.g., PORT=3012) before running.
+  - In production, use a WSGI server: e.g., `gunicorn -w 2 -b 0.0.0.0:${PORT:-3011} wsgi:application`
 
 API docs (Swagger UI) are served under /docs.
 OpenAPI JSON is available at /openapi.json.
 Health check remains at GET / returning {"message":"Healthy"}.
+Default dev port: 3011 (override via PORT environment variable).
 
 ## Quick E2E sanity (manual)
 
-1) Start backend on http://localhost:3001 and frontend on http://localhost:3000
+1) Start backend on http://localhost:3011 and frontend on http://localhost:3000 (ensure frontend uses REACT_APP_API_BASE_URL=http://localhost:3011)
 2) Login via frontend (Supabase email/password)
 3) Onboarding page: submit full_name and department
 4) Role dashboard loads (admin/hr/employee)
