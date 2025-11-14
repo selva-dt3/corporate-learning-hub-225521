@@ -86,3 +86,21 @@ class OnboardingComplete(MethodView):
 
 # Register onboarding under Auth group in the same blueprint registration step
 blp.register_blueprint(onboarding_blp)
+
+# Compatibility route alias (frontend may call without /auth prefix)
+# PUBLIC_INTERFACE
+@blp.route("/onboarding/complete")
+class OnboardingCompleteAlias(MethodView):
+    """Alias to support clients posting to /auth/onboarding/complete or /onboarding/complete."""
+
+    @blp.response(200, ProfileSchema)
+    def post(self):
+        """Complete onboarding for current user (alias)."""
+        # Reuse same logic by delegating to the original handler
+        if not getattr(g, "user_id", None):
+            return jsonify({"error": {"code": "AUTH_ERROR", "message": "Unauthorized"}}), 401
+
+        supabase = getattr(app, "supabase", None)
+        resp = supabase.table("profiles").update({"onboarding_complete": True}).eq("user_id", str(g.user_id)).execute()  # type: ignore
+        data = resp.data[0] if resp.data else None
+        return data or {}

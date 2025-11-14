@@ -86,15 +86,25 @@ def _install_cors(app: Flask) -> None:
     """
     Configure CORS to allow frontend origin(s), including preview origins.
     Applies to all routes including /docs.
+
+    Behavior:
+    - If CORS_ORIGINS env is provided, use that list (exact origins).
+    - If not provided, allow any origin via regex (".*") so preflights succeed in preview.
+      This returns the requesting Origin header (not "*"), which works with credentials.
     """
     origins = app.config.get("CORS_ORIGINS", [])
 
+    # Build dynamic origin allowance:
+    # - When explicitly configured: use configured list
+    # - When empty: permissive regex fallback for preview environments
+    allowed_origins = origins if origins else [r".*"]
+
     # Methods/Headers per requirements
     cors_options = {
-        "origins": origins or [],  # empty -> effectively denies cross-origin unless configured
+        "origins": allowed_origins,
         "supports_credentials": True,
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        "allow_headers": ["Authorization", "Content-Type"],
+        "allow_headers": ["Authorization", "Content-Type", "X-Requested-With"],
         "expose_headers": [],
     }
 
@@ -189,14 +199,23 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
 
         # Default deny framing
         xfo = "DENY"
+        csp = None
 
         # Relax for docs
         path = request.path or ""
         if path.startswith("/docs"):
             # Allow same-origin for embedding Swagger UI in platform preview frame
             xfo = "SAMEORIGIN"
+            # Optional override via env: DOCS_FRAME_ANCESTORS allows explicit framing
+            frame_ancestors = os.getenv("DOCS_FRAME_ANCESTORS", "").strip()
+            if frame_ancestors:
+                # Use CSP frame-ancestors which supersedes X-Frame-Options in modern browsers
+                csp = f"frame-ancestors {frame_ancestors};"
 
         response.headers["X-Frame-Options"] = xfo
+        if csp:
+            # Append/Set Content-Security-Policy
+            response.headers["Content-Security-Policy"] = csp
         return response
 
 
