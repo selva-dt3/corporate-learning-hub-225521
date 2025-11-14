@@ -1,1 +1,3 @@
-# corporate-learning-hub-225521
+# Project Repository
+
+This is the initial README file for the project.
