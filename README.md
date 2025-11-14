@@ -62,6 +62,11 @@ Run backend locally (example):
 - pip install -r requirements.txt
 - python run.py  # serves on http://localhost:${PORT:-3001}
 
+Port already in use?
+- If you see "Port 3001 is in use", another instance is already running (e.g., container or prior process).
+  - Either stop the other process or set a different PORT in lms_backend/.env (e.g., PORT=3010) before running.
+  - In production, use a WSGI server: e.g., `gunicorn -w 2 -b 0.0.0.0:${PORT:-3001} wsgi:application`
+
 API docs (Swagger UI) are served under /docs.
 OpenAPI JSON is available at /openapi.json.
 Health check remains at GET / returning {"message":"Healthy"}.
