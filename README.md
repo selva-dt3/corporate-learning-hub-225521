@@ -62,14 +62,16 @@ Auto-create profiles on first login
 - Ensure FRONTEND_URL and CORS_ORIGINS are set to your frontend origin(s).
   - Local: FRONTEND_URL=http://localhost:3000
   - Multiple origins allowed via CORS_ORIGINS comma-separated list.
-  - For Kavia preview/E2E, include:
-    - https://vscode-internal-31347-beta.beta01.cloud.kavia.ai:3001
-    - https://beta.kavia.ai
+  - Include both localhost and your preview host/port.
+  - For Kavia preview/E2E, include (update the numeric id to match your preview):
+    - https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3000 (frontend)
+    - https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3001 (backend)
+    - https://beta.kavia.ai (if applicable)
   Example:
-    CORS_ORIGINS=http://localhost:3000,https://beta.kavia.ai,https://vscode-internal-31347-beta.beta01.cloud.kavia.ai:3001
+    CORS_ORIGINS=http://localhost:3000,https://beta.kavia.ai,https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3000
 
 - To allow embedding /docs in an iframe from those hosts, set:
-  DOCS_FRAME_ANCESTORS='self' https://beta.kavia.ai https://vscode-internal-31347-beta.beta01.cloud.kavia.ai:3001
+  DOCS_FRAME_ANCESTORS='self' https://beta.kavia.ai https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3000
 - The frontend forwards Authorization: Bearer <supabase_jwt> on every API call.
 - Backend validates JWT using SUPABASE_JWT_SECRET when set, or falls back to unverified decode in dev.
 
