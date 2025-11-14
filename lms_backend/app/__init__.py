@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
-from flask import Flask, g, request, jsonify
+from flask import Flask, g, request, jsonify, make_response
 from flask_cors import CORS
 from flask_smorest import Api
 from dotenv import load_dotenv
@@ -29,9 +29,29 @@ def _load_config(app: Flask) -> None:
     app.config["SUPABASE_ANON_KEY"] = os.getenv("SUPABASE_ANON_KEY")
     app.config["SUPABASE_SERVICE_ROLE_KEY"] = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     app.config["SUPABASE_JWT_SECRET"] = os.getenv("SUPABASE_JWT_SECRET")
-    app.config["FRONTEND_URL"] = os.getenv("FRONTEND_URL", "*")
-    cors_origins = os.getenv("CORS_ORIGINS", app.config["FRONTEND_URL"])
-    app.config["CORS_ORIGINS"] = [o.strip() for o in cors_origins.split(",") if o.strip()]
+
+    # Frontend and CORS origins
+    app.config["FRONTEND_URL"] = os.getenv("FRONTEND_URL", "").strip()
+    extra_allowed = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
+    cors_origins_env = os.getenv("CORS_ORIGINS", "")
+
+    # Build allowed origins list from env:
+    # - FRONTEND_URL
+    # - CORS_ORIGINS (legacy, comma-separated)
+    # - EXTRA_ALLOWED_ORIGINS (comma-separated)
+    # - Always include beta.kavia.ai (preview) if present via explicit string below
+    origins: List[str] = []
+    for raw in [app.config["FRONTEND_URL"], cors_origins_env, extra_allowed]:
+        if raw:
+            origins.extend([o.strip() for o in raw.split(",") if o.strip()])
+
+    # Ensure uniqueness and include known preview host if provided in env
+    # Do not hardcode ports; rely on env to provide exact origins.
+    # Also permit beta.kavia.ai if explicitly added in env; if not set, user can add via EXTRA_ALLOWED_ORIGINS.
+
+    # If nothing configured, default to deny-all except same-origin swagger usage.
+    # However, flask-cors requires an origins list; keep empty to block cross-origin unless configured.
+    app.config["CORS_ORIGINS"] = sorted({o for o in origins if o and o != "*"})
 
     # OpenAPI/Swagger configuration
     app.config["API_TITLE"] = "Corporate Learning Hub - LMS API"
@@ -64,10 +84,29 @@ def _init_supabase(app: Flask) -> Client:
 
 def _install_cors(app: Flask) -> None:
     """
-    Configure CORS to allow frontend origin(s).
+    Configure CORS to allow frontend origin(s), including preview origins.
+    Applies to all routes including /docs.
     """
-    origins = app.config.get("CORS_ORIGINS", ["*"])
-    CORS(app, resources={r"/*": {"origins": origins}}, supports_credentials=True)
+    origins = app.config.get("CORS_ORIGINS", [])
+
+    # Methods/Headers per requirements
+    cors_options = {
+        "origins": origins or [],  # empty -> effectively denies cross-origin unless configured
+        "supports_credentials": True,
+        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        "allow_headers": ["Authorization", "Content-Type"],
+        "expose_headers": [],
+    }
+
+    # Apply to all paths
+    CORS(
+        app,
+        resources={r"/*": cors_options},
+        supports_credentials=cors_options["supports_credentials"],
+        methods=cors_options["methods"],
+        allow_headers=cors_options["allow_headers"],
+        expose_headers=cors_options["expose_headers"],
+    )
 
 
 def _jwt_decode(token: str, app: Flask) -> Optional[Dict[str, Any]]:
@@ -94,9 +133,14 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
     Install before_request/after_request handlers:
     - Authenticate Bearer JWT and load profile from Supabase
     - Attach g.user and g.role
+    - Apply security headers and CORS preflight handling
     """
     @app.before_request
     def authenticate():
+        # Handle OPTIONS preflight early and return 200 with headers applied by flask-cors
+        if request.method == "OPTIONS":
+            return make_response(("", 200))
+
         # Public routes: health, docs/openapi
         path = request.path or ""
         if path == "/" or path.startswith("/docs") or path == "/openapi.json":
@@ -139,13 +183,21 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
 
     @app.after_request
     def set_security_headers(response):
+        # Security headers defaults
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # Default deny framing
+        xfo = "DENY"
+
+        # Relax for docs
+        path = request.path or ""
+        if path.startswith("/docs"):
+            # Allow same-origin for embedding Swagger UI in platform preview frame
+            xfo = "SAMEORIGIN"
+
+        response.headers["X-Frame-Options"] = xfo
         return response
-
-
-
 
 
 def create_app() -> Flask:
