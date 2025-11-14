@@ -48,8 +48,11 @@ Notes:
 Backend location: corporate-learning-hub-225521/lms_backend
 
 Run backend locally (example):
-- Create and populate lms_backend/.env
-- Install Python deps (see requirements.txt)
+- Create and populate lms_backend/.env (see .env.example)
+- python -m venv .venv && source .venv/bin/activate
+- pip install -r requirements.txt
 - python run.py
 
-API docs (Swagger UI) are served under /docs per the Flask app config.
+API docs (Swagger UI) are served under /docs.
+OpenAPI JSON is available at /openapi.json.
+Health check remains at GET / returning {"message":"Healthy"}.
