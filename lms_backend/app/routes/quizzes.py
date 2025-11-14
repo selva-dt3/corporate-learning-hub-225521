@@ -3,7 +3,7 @@ from flask_smorest import Blueprint
 from flask.views import MethodView
 from marshmallow import Schema, fields
 
-from .. import role_required
+from ..auth.decorators import role_required
 
 blp = Blueprint(
     "Quizzes",

@@ -145,24 +145,7 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
         return response
 
 
-def role_required(*roles: str):
-    """
-    Decorator for role-based authorization. Usage:
-    @blp.route(...)
-    @role_required('admin','hr')
-    def get(...):
-        ...
-    """
-    def wrapper(fn):
-        def _inner(*args, **kwargs):
-            role = getattr(g, "role", None)
-            if not role or role not in roles:
-                return jsonify({"error": {"code": "AUTHZ_ERROR", "message": "Insufficient role"}}), 403
-            return fn(*args, **kwargs)
-        # mark for Flask
-        _inner.__name__ = fn.__name__
-        return _inner
-    return wrapper
+
 
 
 def create_app() -> Flask:

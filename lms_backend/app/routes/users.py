@@ -3,7 +3,7 @@ from flask_smorest import Blueprint
 from flask.views import MethodView
 from marshmallow import Schema, fields, validate
 
-from .. import role_required  # decorator from app.__init__
+from ..auth.decorators import role_required  # moved to dedicated module
 
 blp = Blueprint(
     "Users",
