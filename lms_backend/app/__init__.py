@@ -60,6 +60,8 @@ def _load_config(app: Flask) -> None:
     app.config["OPENAPI_URL_PREFIX"] = "/docs"
     app.config["OPENAPI_SWAGGER_UI_PATH"] = ""
     app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+    # Docs embedding/frame-ancestors configuration via env
+    app.config["DOCS_FRAME_ANCESTORS"] = os.getenv("DOCS_FRAME_ANCESTORS", "").strip()
 
     # Simple validation: ensure required keys are present at runtime
     for key in ["SUPABASE_URL", "SUPABASE_ANON_KEY"]:
@@ -108,7 +110,7 @@ def _install_cors(app: Flask) -> None:
         "expose_headers": [],
     }
 
-    # Apply to all paths
+    # Apply to all paths (flask-cors will echo the request Origin if it matches allowed list/regex)
     CORS(
         app,
         resources={r"/*": cors_options},
@@ -207,7 +209,7 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
             # Allow same-origin for embedding Swagger UI in platform preview frame
             xfo = "SAMEORIGIN"
             # Optional override via env: DOCS_FRAME_ANCESTORS allows explicit framing
-            frame_ancestors = os.getenv("DOCS_FRAME_ANCESTORS", "").strip()
+            frame_ancestors = app.config.get("DOCS_FRAME_ANCESTORS", "")
             if frame_ancestors:
                 # Use CSP frame-ancestors which supersedes X-Frame-Options in modern browsers
                 csp = f"frame-ancestors {frame_ancestors};"
