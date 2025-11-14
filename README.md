@@ -93,6 +93,14 @@ OpenAPI JSON is available at /openapi.json.
 Health check remains at GET / returning {"message":"Healthy"}.
 Default dev port: 3011 (override via PORT environment variable).
 
+OpenAPI regeneration:
+- The spec is generated from the Flask-Smorest setup. To update the interfaces/openapi.json file locally, run:
+  python generate_openapi.py from the lms_backend directory. This writes the refreshed spec to lms_backend/interfaces/openapi.json.
+
+Analytics summary response:
+- GET /analytics/summary (admin/hr) returns:
+  { "users": <int>, "lessons": <int>, "quizzes": <int>, "assignments": <int>, "quiz_submissions": <int> }
+
 ## Quick E2E sanity (manual)
 
 1) Start backend on http://localhost:3011 and frontend on http://localhost:3000 (ensure frontend uses REACT_APP_API_BASE_URL=http://localhost:3011)
