@@ -1,6 +1,25 @@
 -- Supabase Schema for LMS Backend
--- NOTE: Run this first, before policies and storage setup.
--- Uses pgcrypto for gen_random_uuid; ensure it's enabled.
+-- APPLY FIRST
+-- Idempotency: Uses IF NOT EXISTS for extension, tables, and indexes so it is safe to re-run.
+-- Prerequisites:
+--   - Supabase project exists; this SQL runs in the target project's Postgres.
+--   - pgcrypto extension is available (managed by Supabase).
+--   - auth.users schema exists (managed by Supabase).
+-- Purpose:
+--   - Defines core tables used by the Flask backend endpoints:
+--     profiles, lessons, quizzes, assignments, quiz_submissions.
+-- Notes:
+--   - Quizzes.spec is JSONB; expected format (used by /quizzes and /quizzes/{id}/submit):
+--     {
+--       "questions": [
+--         {"id":"q1","type":"single","prompt":"...","choices":[...],"answer":0},
+--         {"id":"q2","type":"boolean","prompt":"...","answer":true}
+--       ],
+--       "scoring": {"q1":1,"q2":1}
+--     }
+--     The backend looks up questions[*].answer and optional scoring weights by question id.
+
+-- Enable pgcrypto for gen_random_uuid()
 create extension if not exists "pgcrypto";
 
 -- profiles table stores user metadata linked to auth.users
@@ -22,7 +41,7 @@ create table if not exists public.lessons (
   created_at timestamptz not null default now()
 );
 
--- quizzes holding JSON specification
+-- quizzes holding JSON specification (see notes above)
 create table if not exists public.quizzes (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -31,6 +50,7 @@ create table if not exists public.quizzes (
 );
 
 -- assignments link users to lessons/quizzes with status
+-- Constraint at_least_one_target ensures either a lesson or a quiz is assigned.
 create table if not exists public.assignments (
   id uuid primary key default gen_random_uuid(),
   assignee_user uuid not null references public.profiles(user_id) on delete cascade,
@@ -52,7 +72,7 @@ create table if not exists public.quiz_submissions (
   submitted_at timestamptz not null default now()
 );
 
--- Helpful indexes
+-- Helpful indexes (safe to re-run)
 create index if not exists idx_assignments_assignee_user on public.assignments(assignee_user);
 create index if not exists idx_assignments_lesson_id on public.assignments(lesson_id);
 create index if not exists idx_assignments_quiz_id on public.assignments(quiz_id);

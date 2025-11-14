@@ -1,8 +1,12 @@
 -- Seed data for LMS
--- NOTE:
--- - Create an initial user via Supabase Dashboard (Authentication) or CLI.
--- - Then insert a corresponding profile row manually mapping that user_id and role='admin'.
--- - Replace the UUIDs below as needed in your environment.
+-- APPLY FOURTH (optional)
+-- Idempotency: This file contains example INSERTs commented out by default.
+--   - Copy, replace UUID placeholders with your actual auth.users.id UUIDs and created record ids, then run.
+--   - If you need idempotent seeds, wrap inserts with ON CONFLICT (...) DO NOTHING where applicable.
+-- Prerequisites:
+--   - Users exist in Supabase Authentication; use their UUIDs in profiles.user_id.
+-- Quiz spec reminder:
+--   - spec JSONB must include questions[*].id and answer, and optionally "scoring" map keyed by question id.
 
 -- Example: create initial admin profile (replace '00000000-0000-0000-0000-000000000000')
 -- insert into public.profiles (user_id, role, onboarding_complete, full_name, department)
@@ -14,7 +18,7 @@
 --   ('Welcome to the Company', 'lesson-content/welcome.pdf', '00000000-0000-0000-0000-000000000000'),
 --   ('Security Basics', 'lesson-content/security-basics.pdf', '00000000-0000-0000-0000-000000000000');
 
--- Sample quiz spec structure
+-- Sample quiz spec structure (aligns with /quizzes/{id}/submit scoring logic)
 -- insert into public.quizzes (title, spec)
 -- values
 -- ('Security Basics Quiz', '{

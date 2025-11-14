@@ -1,5 +1,17 @@
 -- Row Level Security and Policies for LMS
--- NOTE: Run this after schema.sql
+-- APPLY SECOND (after schema.sql, before storage_buckets.sql)
+-- Idempotency: Policies use DROP POLICY IF EXISTS then CREATE to allow safe re-runs.
+-- Behavior alignment:
+--   - Backend reads/writes via Supabase client; RLS must allow:
+--       * Admin/HR: full CRUD on lessons, quizzes, assignments; read all submissions; update/delete submissions.
+--       * Employees: read only items assigned to them; create/select own quiz_submissions; read own assignments.
+--   - Profiles:
+--       * Users can read their own profile.
+--       * Admin/HR can read all; admin can update others.
+--       * Non-admins updating profile must not escalate role.
+-- Notes on role resolution:
+--   - We consistently resolve caller role via public.profiles using auth.uid().
+--   - If you store role in JWT claims, you may extend policies to check jwt() as needed.
 
 -- Enable RLS on all tables
 alter table public.profiles enable row level security;
@@ -7,12 +19,6 @@ alter table public.lessons enable row level security;
 alter table public.quizzes enable row level security;
 alter table public.assignments enable row level security;
 alter table public.quiz_submissions enable row level security;
-
--- Helper: determine if current user is admin or hr
--- We use JWT custom claim 'role' stored in app_metadata or custom claim.
--- Adjust path if you store roles differently.
--- Example assumes claim at jwt() -> 'role'
--- Fallback to profiles table for server-side checks where applicable.
 
 -- PROFILES
 -- Select: user can see own profile; admins and HR can see all

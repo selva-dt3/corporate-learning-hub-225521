@@ -23,16 +23,25 @@ The backend expects a Supabase instance for auth, database, and private storage.
 3) Apply SQL in order
 Open the Supabase SQL editor (or use Supabase CLI) and run the SQL files in this exact order:
 
-- lms_backend/supabase/schema.sql
-- lms_backend/supabase/policies.sql
-- lms_backend/supabase/storage_buckets.sql
-- lms_backend/supabase/seed.sql (optional; update UUIDs before running)
+- lms_backend/supabase/schema.sql    (APPLY FIRST)
+- lms_backend/supabase/policies.sql  (APPLY SECOND)
+- lms_backend/supabase/storage_buckets.sql (APPLY THIRD)
+- lms_backend/supabase/seed.sql (APPLY FOURTH, optional; update UUIDs before running)
+
+Prerequisites and Idempotency:
+- pgcrypto extension: schema.sql enables it via "create extension if not exists pgcrypto;" (safe re-run).
+- Tables and indexes are created with IF NOT EXISTS (safe re-run).
+- Policies are applied by dropping if exists and recreating (safe re-run).
+- Storage buckets use ON CONFLICT DO NOTHING and policy drop/create (safe re-run).
+- seed.sql is commented examples; copy, replace UUID placeholders with actual auth.users.id values, then run as needed.
 
 Notes:
-- schema.sql sets up tables and indexes.
-- policies.sql enables RLS and defines policies for admin, hr, and employee roles.
+- schema.sql sets up tables and indexes. Quizzes.spec uses a JSONB format with "questions" and optional "scoring" map; /quizzes/{id}/submit depends on "answer" entries per question.
+- policies.sql enables RLS and defines policies for admin, hr, and employee roles aligned with backend routes:
+  * Admin/HR: CRUD lessons, quizzes, assignments; list all; manage submissions.
+  * Employees: read only assigned lessons/quizzes; read own assignments; insert/select own quiz_submissions.
 - storage_buckets.sql creates private buckets (lesson-content, quiz-assets) and policies so only admin/hr can manage; employees should access via signed URLs issued by the backend.
-- seed.sql includes examples; adjust IDs to match users created in your Supabase auth.
+- seed.sql includes examples; adjust IDs to match users created in your Supabase auth. If you need repeatable seeds, wrap with ON CONFLICT DO NOTHING where appropriate.
 
 4) Create initial admin user
 - Create a user in Supabase Authentication (Dashboard or CLI).
