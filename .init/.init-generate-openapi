@@ -1,0 +1,4 @@
+{
+    "command": "python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt && python generate_openapi.py",
+    "working_directory": "/home/kavia/workspace/code-generation/corporate-learning-hub-225521/lms_backend"
+}
