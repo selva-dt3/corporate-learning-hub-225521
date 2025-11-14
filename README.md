@@ -18,6 +18,7 @@ The backend expects a Supabase instance for auth, database, and private storage.
   - SUPABASE_JWT_SECRET
   - FRONTEND_URL
   - CORS_ORIGINS
+  - PORT (default 3001)
 
 3) Apply SQL in order
 Open the Supabase SQL editor (or use Supabase CLI) and run the SQL files in this exact order:
@@ -43,6 +44,14 @@ Notes:
 - Never commit real Supabase keys or JWT secrets.
 - Buckets are private; serve content through signed URLs.
 
+## CORS and Auth Integration
+
+- Ensure FRONTEND_URL and CORS_ORIGINS are set to your frontend origin(s).
+  - Local: FRONTEND_URL=http://localhost:3000
+  - Multiple origins allowed via CORS_ORIGINS comma-separated list.
+- The frontend forwards Authorization: Bearer <supabase_jwt> on every API call.
+- Backend validates JWT using SUPABASE_JWT_SECRET when set, or falls back to unverified decode in dev.
+
 ## Development
 
 Backend location: corporate-learning-hub-225521/lms_backend
@@ -51,8 +60,18 @@ Run backend locally (example):
 - Create and populate lms_backend/.env (see .env.example)
 - python -m venv .venv && source .venv/bin/activate
 - pip install -r requirements.txt
-- python run.py
+- python run.py  # serves on http://localhost:${PORT:-3001}
 
 API docs (Swagger UI) are served under /docs.
 OpenAPI JSON is available at /openapi.json.
 Health check remains at GET / returning {"message":"Healthy"}.
+
+## Quick E2E sanity (manual)
+
+1) Start backend on http://localhost:3001 and frontend on http://localhost:3000
+2) Login via frontend (Supabase email/password)
+3) Onboarding page: submit full_name and department
+4) Role dashboard loads (admin/hr/employee)
+5) As admin/hr, create a lesson (Lessons page) and an assignment via API (Assignments endpoint) if needed
+6) As employee, open assigned lesson and take a quiz; submit to /quizzes/{id}/submit
+7) As hr/admin, open Analytics page; verify /analytics/summary responds
