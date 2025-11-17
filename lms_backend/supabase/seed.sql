@@ -1,22 +1,50 @@
 -- Seed data for LMS
 -- APPLY FOURTH (optional)
--- Idempotency: This file contains example INSERTs commented out by default.
---   - Copy, replace UUID placeholders with your actual auth.users.id UUIDs and created record ids, then run.
---   - If you need idempotent seeds, wrap inserts with ON CONFLICT (...) DO NOTHING where applicable.
+-- Execution order reminder:
+--   1) lms_backend/supabase/schema.sql
+--   2) lms_backend/supabase/policies.sql
+--   3) lms_backend/supabase/storage_buckets.sql
+--   4) lms_backend/supabase/seed.sql (optional; update placeholders)
+--
+-- Idempotency:
+--   - This file contains example INSERTs commented out by default.
+--   - Replace placeholders with your actual values and uncomment to run.
+--   - Where possible, use ON CONFLICT DO NOTHING to make re-runs safe.
+-- Placeholders:
+--   - {ADMIN_USER_UUID}: UUID from auth.users.id that should be admin
+--   - {EMPLOYEE_USER_UUID}: UUID from auth.users.id that should be employee
+--   - {LESSON_ID}, {QUIZ_ID}: Use returned IDs from inserts, or select them
+--
 -- Prerequisites:
 --   - Users exist in Supabase Authentication; use their UUIDs in profiles.user_id.
+--
 -- Quiz spec reminder:
 --   - spec JSONB must include questions[*].id and answer, and optionally "scoring" map keyed by question id.
 
--- Example: create initial admin profile (replace '00000000-0000-0000-0000-000000000000')
+-- Example: create initial admin profile
 -- insert into public.profiles (user_id, role, onboarding_complete, full_name, department)
--- values ('00000000-0000-0000-0000-000000000000', 'admin', true, 'System Admin', 'IT');
+-- values ('{ADMIN_USER_UUID}', 'admin', true, 'System Admin', 'IT')
+-- on conflict (user_id) do update
+-- set role = excluded.role,
+--     onboarding_complete = excluded.onboarding_complete,
+--     full_name = excluded.full_name,
+--     department = excluded.department;
 
--- Sample lessons & quizzes (owners should be admin/hr user ids; replace owner UUID)
+-- A sample employee profile
+-- insert into public.profiles (user_id, role, onboarding_complete, full_name, department)
+-- values ('{EMPLOYEE_USER_UUID}', 'employee', false, 'Jane Employee', 'Engineering')
+-- on conflict (user_id) do update
+-- set role = excluded.role,
+--     onboarding_complete = excluded.onboarding_complete,
+--     full_name = excluded.full_name,
+--     department = excluded.department;
+
+-- Sample lessons (owners should be admin/hr user ids)
 -- insert into public.lessons (title, content_url, owner)
 -- values
---   ('Welcome to the Company', 'lesson-content/welcome.pdf', '00000000-0000-0000-0000-000000000000'),
---   ('Security Basics', 'lesson-content/security-basics.pdf', '00000000-0000-0000-0000-000000000000');
+--   ('Welcome to the Company', 'lesson-content/welcome.pdf', '{ADMIN_USER_UUID}'),
+--   ('Security Basics', 'lesson-content/security-basics.pdf', '{ADMIN_USER_UUID}')
+-- on conflict do nothing;
 
 -- Sample quiz spec structure (aligns with /quizzes/{id}/submit scoring logic)
 -- insert into public.quizzes (title, spec)
@@ -27,19 +55,23 @@
 --     {"id": "q2", "type": "boolean", "prompt": "Use strong passwords.", "answer": true}
 --   ],
 --   "scoring": {"q1": 1, "q2": 1}
--- }'::jsonb);
+-- }'::jsonb)
+-- on conflict do nothing;
 
 -- Assignments (replace assignee_user, lesson_id, quiz_id with actual IDs)
 -- insert into public.assignments (assignee_user, lesson_id, status)
--- values ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', 'assigned');
+-- values ('{EMPLOYEE_USER_UUID}', '{LESSON_ID}', 'assigned')
+-- on conflict do nothing;
 
 -- insert into public.assignments (assignee_user, quiz_id, status)
--- values ('11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', 'assigned');
+-- values ('{EMPLOYEE_USER_UUID}', '{QUIZ_ID}', 'assigned')
+-- on conflict do nothing;
 
--- A sample employee profile (replace user_id)
--- insert into public.profiles (user_id, role, onboarding_complete, full_name, department)
--- values ('11111111-1111-1111-1111-111111111111', 'employee', false, 'Jane Employee', 'Engineering');
+-- To quickly get IDs after inserts, you may run:
+--   select id from public.lessons where title = 'Security Basics';
+--   select id from public.quizzes where title = 'Security Basics Quiz';
 
--- Note: To test quiz_submissions, after creating a quiz and employee, run:
+-- Example quiz submission (for testing scoring/analytics)
 -- insert into public.quiz_submissions (quiz_id, user_id, answers, score)
--- values ('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', '{"q1":0,"q2":true}', 2);
+-- values ('{QUIZ_ID}', '{EMPLOYEE_USER_UUID}', '{"q1":0,"q2":true}', 2)
+-- on conflict do nothing;

@@ -13,7 +13,7 @@
 --   - We consistently resolve caller role via public.profiles using auth.uid().
 --   - If you store role in JWT claims, you may extend policies to check jwt() as needed.
 
--- Enable RLS on all tables
+-- Enable RLS on all tables (safe if already enabled)
 alter table public.profiles enable row level security;
 alter table public.lessons enable row level security;
 alter table public.quizzes enable row level security;

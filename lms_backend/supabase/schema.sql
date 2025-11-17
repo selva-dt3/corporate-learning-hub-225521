@@ -18,6 +18,13 @@
 --       "scoring": {"q1":1,"q2":1}
 --     }
 --     The backend looks up questions[*].answer and optional scoring weights by question id.
+-- Alignment with backend/OpenAPI:
+--   - profiles.user_id (uuid PK) maps to app auth user "sub" and ProfileSchema.user_id
+--   - lessons: id (uuid), title (text), content_url (text), owner (uuid -> profiles.user_id)
+--   - quizzes: id (uuid), title (text), spec (jsonb)
+--   - assignments: id (uuid), assignee_user (uuid -> profiles.user_id), lesson_id (uuid?),
+--                  quiz_id (uuid?), due_at (timestamptz?), status (text enum)
+--   - quiz_submissions: id (uuid), quiz_id (uuid), user_id (uuid), answers (jsonb), score (numeric), submitted_at (timestamptz)
 
 -- Enable pgcrypto for gen_random_uuid()
 create extension if not exists "pgcrypto";
