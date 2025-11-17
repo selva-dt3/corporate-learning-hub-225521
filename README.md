@@ -13,7 +13,7 @@ Copy lms_backend/.env.example to lms_backend/.env and populate:
 - FRONTEND_URL (e.g., http://localhost:3000)
 - CORS_ORIGINS (comma-separated list of allowed frontend origins)
 - DOCS_FRAME_ANCESTORS (space-separated list for frame-ancestors CSP)
-- PORT (default 3011)
+- PORT (default 3001)
 
 Conventions and usage:
 - Backend reads SUPABASE_* for auth and DB operations.
@@ -26,7 +26,7 @@ Conventions and usage:
 
 ## Integration Matrix
 
-- Frontend → Backend API: uses REACT_APP_API_BASE_URL (or runtime public/env.js override) and sends Authorization: Bearer <supabase_jwt>.
+- Frontend → Backend API: uses REACT_APP_API_BASE_URL (or runtime public/env.js override) and sends Authorization: Bearer <supabase_jwt>. Default backend dev port is http://localhost:3001.
 - Backend → Supabase:
   - SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY for server operations (profile auto-create, RLS-aware queries).
   - Validates JWTs using SUPABASE_JWT_SECRET.
@@ -101,13 +101,13 @@ Backend location: corporate-learning-hub-225521/lms_backend
 Run backend locally:
 - python -m venv .venv && source .venv/bin/activate
 - pip install -r requirements.txt
-- python run.py  # http://localhost:${PORT:-3011}
+- python run.py  # http://localhost:${PORT:-3001}
 
 Port already in use?
-- If you see "Port 3011 is in use", either stop the other process or set a different PORT in lms_backend/.env (e.g., PORT=3012).
-- Prod: `gunicorn -w 2 -b 0.0.0.0:${PORT:-3011} wsgi:application`
+- If you see "Port 3001 is in use", either stop the other process or set a different PORT in lms_backend/.env (e.g., PORT=3012).
+- Prod: `gunicorn -w 2 -b 0.0.0.0:${PORT:-3001} wsgi:application`
 
-API docs at /docs, OpenAPI JSON at /openapi.json, health at GET /.
+API docs at /docs, OpenAPI JSON at /openapi.json, health at GET / (returns 200 OK).
 
 OpenAPI regeneration:
 - From lms_backend: `python generate_openapi.py` to update interfaces/openapi.json.
@@ -117,8 +117,8 @@ Analytics summary response (admin/hr):
 
 ## End-to-End Verification Steps
 
-1) Start backend (http://localhost:3011) and frontend (http://localhost:3000).
-   - Frontend must have REACT_APP_API_BASE_URL=http://localhost:3011 via .env or public/env.js.
+1) Start backend (http://localhost:3001) and frontend (http://localhost:3000).
+   - Frontend must have REACT_APP_API_BASE_URL=http://localhost:3001 via .env or public/env.js.
 2) Login: use Supabase email/password for a user that exists in auth.
 3) Onboarding: fill full_name and department; POST /auth/onboarding/complete.
 4) Role routing:
