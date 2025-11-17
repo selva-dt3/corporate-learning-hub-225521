@@ -10,6 +10,21 @@ from typing import Callable, Any
 
 from flask import g, jsonify
 
+# PUBLIC_INTERFACE
+def require_auth() -> Callable[..., Any]:
+    """Require that a request is authenticated.
+
+    This decorator checks that the request context (set by app.before_request)
+    has a valid g.user_id. If missing, returns 401 Unauthorized.
+    """
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(fn)
+        def _inner(*args, **kwargs):
+            if not getattr(g, "user_id", None):
+                return jsonify({"error": {"code": "AUTH_ERROR", "message": "Unauthorized"}}), 401
+            return fn(*args, **kwargs)
+        return _inner
+    return decorator
 
 # PUBLIC_INTERFACE
 def role_required(*roles: str) -> Callable[..., Any]:

@@ -18,6 +18,7 @@ The backend expects a Supabase instance for auth, database, and private storage.
   - SUPABASE_JWT_SECRET
   - FRONTEND_URL
   - CORS_ORIGINS
+  - DOCS_FRAME_ANCESTORS
   - PORT (default 3011)
 
 3) Apply SQL in order

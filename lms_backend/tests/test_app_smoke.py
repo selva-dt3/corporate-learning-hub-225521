@@ -9,3 +9,10 @@ def test_app_import_and_factory():
     # health and docs should exist
     assert "/" in rules
     assert any(r.startswith("/docs") for r in rules)
+    # core routes present
+    assert any(r.startswith("/auth") for r in rules)
+    assert any(r.startswith("/users") for r in rules)
+    assert any(r.startswith("/lessons") for r in rules)
+    assert any(r.startswith("/quizzes") for r in rules)
+    assert any(r.startswith("/assignments") for r in rules)
+    assert any(r.startswith("/analytics") for r in rules)
