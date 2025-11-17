@@ -1,4 +1,4 @@
-from flask import current_app as app
+from flask import current_app as app, jsonify
 from flask_smorest import Blueprint
 from flask.views import MethodView
 from marshmallow import Schema, fields
@@ -39,6 +39,14 @@ class AnalyticsSummary(MethodView):
         - quiz_submissions: number of quiz submissions
         """
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({
+                "error": {
+                    "code": "SERVICE_UNAVAILABLE",
+                    "message": "Supabase is not configured."
+                }
+            }), 503
+
         # Counts
         profiles_count = supabase.table("profiles").select("user_id", count="exact").execute()  # type: ignore
         lessons_count = supabase.table("lessons").select("id", count="exact").execute()  # type: ignore

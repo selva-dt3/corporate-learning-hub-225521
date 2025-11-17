@@ -41,6 +41,8 @@ class AssignmentsCollection(MethodView):
     def get(self):
         """List assignments visible to the user (admin/hr all, employee own via RLS)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("assignments").select("*").order("created_at", desc=True).execute()  # type: ignore
         return resp.data or []
 
@@ -50,6 +52,8 @@ class AssignmentsCollection(MethodView):
     def post(self, json_data):
         """Create assignment (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("assignments").insert(json_data).execute()  # type: ignore
         return (resp.data[0] if resp.data else {}) or {}, 201
 
@@ -63,6 +67,8 @@ class AssignmentResource(MethodView):
     def get(self, assignment_id):
         """Get assignment by id (RLS enforced)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("assignments").select("*").eq("id", assignment_id).limit(1).execute()  # type: ignore
         if not resp.data:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Assignment not found"}}), 404
@@ -74,6 +80,8 @@ class AssignmentResource(MethodView):
     def patch(self, json_data, assignment_id):
         """Update assignment (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("assignments").update(json_data).eq("id", assignment_id).execute()  # type: ignore
         return (resp.data[0] if resp.data else {}) or {}
 
@@ -81,6 +89,8 @@ class AssignmentResource(MethodView):
     def delete(self, assignment_id):
         """Delete assignment (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         supabase.table("assignments").delete().eq("id", assignment_id).execute()  # type: ignore
         return {"deleted": True}
 
@@ -99,5 +109,7 @@ class AssignmentsByUser(MethodView):
             return jsonify({"error": {"code": "AUTHZ_ERROR", "message": "Forbidden"}}), 403
 
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("assignments").select("*").eq("assignee_user", user_id).order("created_at", desc=True).execute()  # type: ignore
         return resp.data or []

@@ -43,6 +43,8 @@ class UsersCollection(MethodView):
     def get(self):
         """List all users (admin only)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("profiles").select("*").order("created_at").execute()  # type: ignore
         return resp.data or []
 
@@ -52,6 +54,8 @@ class UsersCollection(MethodView):
     def post(self, json_data):
         """Create a profile row for an existing Supabase auth user (admin only)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         data = {
             "user_id": str(json_data["user_id"]),
             "role": json_data["role"],
@@ -74,6 +78,8 @@ class UserResource(MethodView):
     def patch(self, json_data, user_id):
         """Update a user's profile (admin only)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         updates = {k: v for k, v in json_data.items() if k in ["role", "full_name", "department", "onboarding_complete"]}
         if not updates:
             return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "No fields to update"}}), 400

@@ -26,13 +26,16 @@ class ProfileResource(MethodView):
 
     @blp.response(200, ProfileSchema, description="Current user profile")
     def get(self):
-        """Get current user's profile.
+        """
+        Get current user's profile.
         Returns the authenticated user's profile row from Supabase.
         """
         if not getattr(g, "user_id", None):
             return jsonify({"error": {"code": "AUTH_ERROR", "message": "Unauthorized"}}), 401
 
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("profiles").select("*").eq("user_id", str(g.user_id)).limit(1).execute()  # type: ignore
         if not resp.data:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Profile not found"}}), 404
@@ -55,6 +58,8 @@ class ProfileResource(MethodView):
             return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "No valid fields to update"}}), 400
 
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("profiles").update(updates).eq("user_id", str(g.user_id)).execute()  # type: ignore
         # Supabase returns list of rows updated
         data = resp.data[0] if resp.data else None
@@ -80,6 +85,8 @@ class OnboardingComplete(MethodView):
             return jsonify({"error": {"code": "AUTH_ERROR", "message": "Unauthorized"}}), 401
 
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("profiles").update({"onboarding_complete": True}).eq("user_id", str(g.user_id)).execute()  # type: ignore
         data = resp.data[0] if resp.data else None
         return data or {}
@@ -101,6 +108,8 @@ class OnboardingCompleteAlias(MethodView):
             return jsonify({"error": {"code": "AUTH_ERROR", "message": "Unauthorized"}}), 401
 
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("profiles").update({"onboarding_complete": True}).eq("user_id", str(g.user_id)).execute()  # type: ignore
         data = resp.data[0] if resp.data else None
         return data or {}
@@ -124,6 +133,8 @@ class RootOnboardingComplete(MethodView):
         if not getattr(g, "user_id", None):
             return jsonify({"error": {"code": "AUTH_ERROR", "message": "Unauthorized"}}), 401
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("profiles").update({"onboarding_complete": True}).eq("user_id", str(g.user_id)).execute()  # type: ignore
         data = resp.data[0] if resp.data else None
         return data or {}

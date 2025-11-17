@@ -37,6 +37,8 @@ class LessonsCollection(MethodView):
     def get(self):
         """List lessons visible to the user (admin/hr all; employees only assigned ones per RLS)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("lessons").select("*").order("created_at", desc=True).execute()  # type: ignore
         return resp.data or []
 
@@ -46,6 +48,8 @@ class LessonsCollection(MethodView):
     def post(self, json_data):
         """Create lesson (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         data = {
             "title": json_data["title"],
             "content_url": json_data.get("content_url"),
@@ -64,6 +68,8 @@ class LessonResource(MethodView):
     def get(self, lesson_id):
         """Get lesson by id (RLS controls visibility)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("lessons").select("*").eq("id", lesson_id).limit(1).execute()  # type: ignore
         if not resp.data:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Lesson not found"}}), 404
@@ -75,6 +81,8 @@ class LessonResource(MethodView):
     def patch(self, json_data, lesson_id):
         """Update lesson (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("lessons").update(json_data).eq("id", lesson_id).execute()  # type: ignore
         return (resp.data[0] if resp.data else {}) or {}
 
@@ -82,5 +90,7 @@ class LessonResource(MethodView):
     def delete(self, lesson_id):
         """Delete lesson (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         supabase.table("lessons").delete().eq("id", lesson_id).execute()  # type: ignore
         return {"deleted": True}

@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 from typing import Any, Dict, Optional, List
 
 from flask import Flask, g, request, jsonify, make_response
@@ -22,13 +21,14 @@ from .routes.analytics import blp as analytics_blp
 def _load_config(app: Flask) -> None:
     """
     Load configuration from environment variables.
+    Performs validation and logs actionable guidance without aborting startup.
     """
     load_dotenv()  # Load from lms_backend/.env if present
 
-    app.config["SUPABASE_URL"] = os.getenv("SUPABASE_URL")
-    app.config["SUPABASE_ANON_KEY"] = os.getenv("SUPABASE_ANON_KEY")
-    app.config["SUPABASE_SERVICE_ROLE_KEY"] = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    app.config["SUPABASE_JWT_SECRET"] = os.getenv("SUPABASE_JWT_SECRET")
+    app.config["SUPABASE_URL"] = (os.getenv("SUPABASE_URL") or "").strip()
+    app.config["SUPABASE_ANON_KEY"] = (os.getenv("SUPABASE_ANON_KEY") or "").strip()
+    app.config["SUPABASE_SERVICE_ROLE_KEY"] = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    app.config["SUPABASE_JWT_SECRET"] = (os.getenv("SUPABASE_JWT_SECRET") or "").strip()
 
     # Frontend and CORS origins
     app.config["FRONTEND_URL"] = os.getenv("FRONTEND_URL", "").strip()
@@ -36,21 +36,12 @@ def _load_config(app: Flask) -> None:
     cors_origins_env = os.getenv("CORS_ORIGINS", "")
 
     # Build allowed origins list from env:
-    # - FRONTEND_URL
-    # - CORS_ORIGINS (legacy, comma-separated)
-    # - EXTRA_ALLOWED_ORIGINS (comma-separated)
-    # - Always include beta.kavia.ai (preview) if present via explicit string below
     origins: List[str] = []
     for raw in [app.config["FRONTEND_URL"], cors_origins_env, extra_allowed]:
         if raw:
             origins.extend([o.strip() for o in raw.split(",") if o.strip()])
 
-    # Ensure uniqueness and include known preview host if provided in env
-    # Do not hardcode ports; rely on env to provide exact origins.
-    # Also permit beta.kavia.ai if explicitly added in env; if not set, user can add via EXTRA_ALLOWED_ORIGINS.
-
     # If nothing configured, default to deny-all except same-origin swagger usage.
-    # However, flask-cors requires an origins list; keep empty to block cross-origin unless configured.
     app.config["CORS_ORIGINS"] = sorted({o for o in origins if o and o != "*"})
 
     # OpenAPI/Swagger configuration
@@ -63,25 +54,77 @@ def _load_config(app: Flask) -> None:
     # Docs embedding/frame-ancestors configuration via env
     app.config["DOCS_FRAME_ANCESTORS"] = os.getenv("DOCS_FRAME_ANCESTORS", "").strip()
 
-    # Simple validation: ensure required keys are present at runtime
-    for key in ["SUPABASE_URL", "SUPABASE_ANON_KEY"]:
-        if not app.config.get(key):
-            # Let app still start for health/docs; auth-required endpoints will fail with 500
-            app.logger.warning(f"Environment variable {key} is not set. Authenticated calls may fail.")
+    # Robust validation with guidance
+    url = app.config.get("SUPABASE_URL", "")
+    anon = app.config.get("SUPABASE_ANON_KEY", "")
+    svc = app.config.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+    if not url:
+        app.logger.warning(
+            "SUPABASE_URL is not set. Supabase-backed endpoints will be unavailable. "
+            "Set SUPABASE_URL in lms_backend/.env."
+        )
+
+    # Detect placeholders or obviously invalid keys (short length or known dummy prefixes)
+    def _is_invalid_key(k: str) -> bool:
+        if not k:
+            return True
+        # Supabase keys are JWT-like base64 segments with at least two dots typically
+        if k.count(".") < 2:
+            return True
+        # Common placeholders
+        if any(p in k.lower() for p in ["your-", "placeholder", "changeme", "example", "xxxx", "placeholder"]):
+            return True
+        return False
+
+    if _is_invalid_key(anon):
+        app.logger.warning(
+            "SUPABASE_ANON_KEY appears missing or invalid. Public client operations will be disabled. "
+            "Ensure SUPABASE_ANON_KEY is set to your project's anon public key."
+        )
+    if svc and _is_invalid_key(svc):
+        app.logger.warning(
+            "SUPABASE_SERVICE_ROLE_KEY appears invalid. Server-side privileged operations will be disabled. "
+            "Unset or correct SUPABASE_SERVICE_ROLE_KEY."
+        )
 
 
-def _init_supabase(app: Flask) -> Client:
+def _init_supabase(app: Flask) -> Optional[Client]:
     """
     Initialize and attach Supabase client to app.
-    """
-    url = app.config.get("SUPABASE_URL")
-    key = app.config.get("SUPABASE_SERVICE_ROLE_KEY") or app.config.get("SUPABASE_ANON_KEY")
-    if not url or not key:
-        app.logger.warning("Supabase not fully configured, some endpoints will not function.")
-        return None  # type: ignore
 
-    client = create_client(url, key)
-    return client
+    Logic:
+    - Prefer using the anon key for general runtime operations to respect RLS.
+    - Only use service role for guarded server tasks (auto-create profile), and only if the key is valid.
+    - If URL or anon key invalid, do not create client; return None so routes can return 503 gracefully.
+    """
+    url = (app.config.get("SUPABASE_URL") or "").strip()
+    anon_key = (app.config.get("SUPABASE_ANON_KEY") or "").strip()
+    svc_key = (app.config.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+
+    def _looks_valid(k: str) -> bool:
+        return bool(k) and k.count(".") >= 2
+
+    if not url or not _looks_valid(anon_key):
+        app.logger.warning(
+            "Supabase client not initialized: missing or invalid SUPABASE_URL/SUPABASE_ANON_KEY. "
+            "App will continue to serve health/docs; endpoints requiring Supabase will respond with 503."
+        )
+        return None
+
+    try:
+        # Use anon key for primary client
+        client = create_client(url, anon_key)
+        # Store a flag so request handlers know if service role is available
+        app.config["HAS_SERVICE_ROLE"] = _looks_valid(svc_key)
+        if not app.config["HAS_SERVICE_ROLE"] and svc_key:
+            app.logger.warning(
+                "SUPABASE_SERVICE_ROLE_KEY provided but appears invalid; privileged ops (like auto-profile) disabled."
+            )
+        return client
+    except Exception as e:
+        app.logger.error(f"Failed to initialize Supabase client: {e}")
+        return None
 
 
 def _install_cors(app: Flask) -> None:
@@ -144,7 +187,7 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
     """
     Install before_request/after_request handlers:
     - Authenticate Bearer JWT and load profile from Supabase
-    - Auto-create a default profile on first login when using service role key
+    - Auto-create a default profile on first login when service role key is valid
     - Attach g.user and g.role
     - Apply security headers and CORS preflight handling
     """
@@ -184,41 +227,51 @@ def _attach_request_context(app: Flask, supabase: Optional[Client]) -> None:
         g.user = {"id": user_id}
         g.role = None
 
+        # If Supabase is not configured, fail gracefully for routes that need it
+        if not supabase:
+            app.logger.warning("Supabase client unavailable; returning 503 for path=%s", path)
+            return jsonify({
+                "error": {
+                    "code": "SERVICE_UNAVAILABLE",
+                    "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY. "
+                               "For server-side operations, optionally set SUPABASE_SERVICE_ROLE_KEY."
+                }
+            }), 503
+
         # Fetch role and profile; if not present attempt creation (service role required)
-        if supabase:
-            try:
-                resp = supabase.table("profiles").select("*").eq("user_id", user_id).limit(1).execute()  # type: ignore
-                if resp.data and len(resp.data) > 0:
-                    profile = resp.data[0]
-                    g.user["profile"] = profile
-                    g.role = profile.get("role")
-                    app.logger.debug("Loaded profile for user_id=%s role=%s", user_id, g.role)
+        try:
+            resp = supabase.table("profiles").select("*").eq("user_id", user_id).limit(1).execute()  # type: ignore
+            if resp.data and len(resp.data) > 0:
+                profile = resp.data[0]
+                g.user["profile"] = profile
+                g.role = profile.get("role")
+                app.logger.debug("Loaded profile for user_id=%s role=%s", user_id, g.role)
+            else:
+                # Attempt auto-create a minimal profile only when a valid service role key is configured.
+                if app.config.get("HAS_SERVICE_ROLE"):
+                    payload = {
+                        "user_id": user_id,
+                        "role": "employee",
+                        "onboarding_complete": False,
+                    }
+                    try:
+                        ins = supabase.table("profiles").insert(payload).execute()  # type: ignore
+                        created = ins.data[0] if ins.data else payload
+                        g.user["profile"] = created
+                        g.role = created.get("role")
+                        app.logger.info("Auto-created profile for user_id=%s with role=%s", user_id, g.role)
+                    except Exception as ie:
+                        app.logger.error("Auto-create profile failed for user_id=%s error=%s", user_id, ie)
+                        # Keep role None; downstream role_required will enforce access
                 else:
-                    # Attempt auto-create a minimal profile when service role key is configured.
-                    # Default role: employee; onboarding incomplete.
-                    if app.config.get("SUPABASE_SERVICE_ROLE_KEY"):
-                        payload = {
-                            "user_id": user_id,
-                            "role": "employee",
-                            "onboarding_complete": False,
-                        }
-                        try:
-                            ins = supabase.table("profiles").insert(payload).execute()  # type: ignore
-                            created = ins.data[0] if ins.data else payload
-                            g.user["profile"] = created
-                            g.role = created.get("role")
-                            app.logger.info("Auto-created profile for user_id=%s with role=%s", user_id, g.role)
-                        except Exception as ie:
-                            app.logger.error("Auto-create profile failed for user_id=%s error=%s", user_id, ie)
-                            # Keep role None; downstream role_required will enforce access
-                    else:
-                        # Service role not configured; cannot auto-create due to RLS/policies
-                        app.logger.warning(
-                            "No SUPABASE_SERVICE_ROLE_KEY; cannot auto-create profile for user_id=%s", user_id
-                        )
-                        g.role = None
-            except Exception as e:
-                app.logger.error(f"Supabase profile fetch failed: {e}")
+                    # Service role not configured; cannot auto-create due to RLS/policies
+                    app.logger.warning(
+                        "SUPABASE_SERVICE_ROLE_KEY not available or invalid; cannot auto-create profile for user_id=%s",
+                        user_id,
+                    )
+                    g.role = None
+        except Exception as e:
+            app.logger.error(f"Supabase profile fetch failed: {e}")
 
     @app.after_request
     def set_security_headers(response):
@@ -276,7 +329,7 @@ def create_app() -> Flask:
         ],
     })
 
-    # Attach Supabase client to app for reuse
+    # Attach Supabase client to app for reuse (lazy/guarded init)
     app.supabase = _init_supabase(app)  # type: ignore[attr-defined]
 
     # Request context auth handlers

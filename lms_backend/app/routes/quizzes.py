@@ -36,6 +36,8 @@ class QuizzesCollection(MethodView):
     def get(self):
         """List quizzes visible to the user (RLS limits for employees)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("quizzes").select("*").order("created_at", desc=True).execute()  # type: ignore
         return resp.data or []
 
@@ -45,6 +47,8 @@ class QuizzesCollection(MethodView):
     def post(self, json_data):
         """Create quiz (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("quizzes").insert(json_data).execute()  # type: ignore
         return (resp.data[0] if resp.data else {}) or {}, 201
 
@@ -58,6 +62,8 @@ class QuizResource(MethodView):
     def get(self, quiz_id):
         """Get quiz by id."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("quizzes").select("*").eq("id", quiz_id).limit(1).execute()  # type: ignore
         if not resp.data:
             return jsonify({"error": {"code": "NOT_FOUND", "message": "Quiz not found"}}), 404
@@ -69,6 +75,8 @@ class QuizResource(MethodView):
     def patch(self, json_data, quiz_id):
         """Update quiz (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         resp = supabase.table("quizzes").update(json_data).eq("id", quiz_id).execute()  # type: ignore
         return (resp.data[0] if resp.data else {}) or {}
 
@@ -76,6 +84,8 @@ class QuizResource(MethodView):
     def delete(self, quiz_id):
         """Delete quiz (admin/hr)."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         supabase.table("quizzes").delete().eq("id", quiz_id).execute()  # type: ignore
         return {"deleted": True}
 
@@ -100,6 +110,8 @@ class QuizSubmit(MethodView):
     def post(self, json_data, quiz_id):
         """Submit quiz answers. Employees submit their own; admins/hr may submit for testing."""
         supabase = getattr(app, "supabase", None)
+        if not supabase:
+            return jsonify({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Supabase is not configured."}}), 503
         # fetch quiz spec
         quiz_resp = supabase.table("quizzes").select("*").eq("id", quiz_id).limit(1).execute()  # type: ignore
         if not quiz_resp.data:
