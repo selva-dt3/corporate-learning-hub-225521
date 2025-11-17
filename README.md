@@ -2,27 +2,51 @@
 
 This repository contains the LMS backend (Flask) and integrates with Supabase for authentication, database, and storage.
 
-## Supabase Setup (Backend)
+## Required Environment Variables (Backend)
 
-The backend expects a Supabase instance for auth, database, and private storage. Follow these steps to initialize:
+Copy lms_backend/.env.example to lms_backend/.env and populate:
+
+- SUPABASE_URL
+- SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- SUPABASE_JWT_SECRET
+- FRONTEND_URL (e.g., http://localhost:3000)
+- CORS_ORIGINS (comma-separated list of allowed frontend origins)
+- DOCS_FRAME_ANCESTORS (space-separated list for frame-ancestors CSP)
+- PORT (default 3011)
+
+Conventions and usage:
+- Backend reads SUPABASE_* for auth and DB operations.
+- CORS and Docs:
+  - CORS_ORIGINS controls allowed origins for API.
+  - DOCS_FRAME_ANCESTORS controls which origins can embed /docs.
+- JWT:
+  - Backend validates Authorization: Bearer <supabase_jwt> using SUPABASE_JWT_SECRET.
+  - If missing in development, it may fall back to unverified decode, but set it for realistic E2E.
+
+## Integration Matrix
+
+- Frontend → Backend API: uses REACT_APP_API_BASE_URL (or runtime public/env.js override) and sends Authorization: Bearer <supabase_jwt>.
+- Backend → Supabase:
+  - SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY for server operations (profile auto-create, RLS-aware queries).
+  - Validates JWTs using SUPABASE_JWT_SECRET.
+- CORS:
+  - FRONTEND_URL must match a value in CORS_ORIGINS.
+  - Include all origins (localhost and preview URLs) that will access the backend.
+- Docs embedding:
+  - Set DOCS_FRAME_ANCESTORS to 'self' and the specific frontend origins to allow embedding /docs.
+
+## Supabase Setup (Backend)
 
 1) Create a Supabase project
 - Sign in to Supabase and create a new project.
 - Do NOT commit any actual keys in git.
 
 2) Configure environment variables
-- Copy lms_backend/.env.example to lms_backend/.env and populate:
-  - SUPABASE_URL
-  - SUPABASE_ANON_KEY
-  - SUPABASE_SERVICE_ROLE_KEY
-  - SUPABASE_JWT_SECRET
-  - FRONTEND_URL
-  - CORS_ORIGINS
-  - DOCS_FRAME_ANCESTORS
-  - PORT (default 3011)
+- Populate lms_backend/.env as listed above.
 
 3) Apply SQL in order
-Open the Supabase SQL editor (or use Supabase CLI) and run the SQL files in this exact order:
+Run in Supabase SQL editor or CLI:
 
 - lms_backend/supabase/schema.sql    (APPLY FIRST)
 - lms_backend/supabase/policies.sql  (APPLY SECOND)
@@ -30,86 +54,97 @@ Open the Supabase SQL editor (or use Supabase CLI) and run the SQL files in this
 - lms_backend/supabase/seed.sql (APPLY FOURTH, optional; update UUIDs before running)
 
 Prerequisites and Idempotency:
-- pgcrypto extension: schema.sql enables it via "create extension if not exists pgcrypto;" (safe re-run).
-- Tables and indexes are created with IF NOT EXISTS (safe re-run).
-- Policies are applied by dropping if exists and recreating (safe re-run).
-- Storage buckets use ON CONFLICT DO NOTHING and policy drop/create (safe re-run).
-- seed.sql is commented examples; copy, replace UUID placeholders with actual auth.users.id values, then run as needed.
+- pgcrypto extension enabled in schema.sql (safe re-run).
+- Tables/indexes guarded by IF NOT EXISTS.
+- Policies drop/recreate (safe).
+- Buckets upsert and policy drop/create (safe).
+- seed.sql contains examples; replace placeholder UUIDs.
 
 Notes:
-- schema.sql sets up tables and indexes. Quizzes.spec uses a JSONB format with "questions" and optional "scoring" map; /quizzes/{id}/submit depends on "answer" entries per question.
-- policies.sql enables RLS and defines policies for admin, hr, and employee roles aligned with backend routes:
-  * Admin/HR: CRUD lessons, quizzes, assignments; list all; manage submissions.
-  * Employees: read only assigned lessons/quizzes; read own assignments; insert/select own quiz_submissions.
-- storage_buckets.sql creates private buckets (lesson-content, quiz-assets) and policies so only admin/hr can manage; employees should access via signed URLs issued by the backend.
-- seed.sql includes examples; adjust IDs to match users created in your Supabase auth. If you need repeatable seeds, wrap with ON CONFLICT DO NOTHING where appropriate.
+- policies.sql aligns with backend routes and roles.
+- Buckets are private; serve via backend-signed URLs.
 
 4) Create initial admin user
-- Create a user in Supabase Authentication (Dashboard or CLI).
-- Insert a corresponding row in public.profiles with role='admin' using the user_id from auth.users.
-- After that, create HR and Employee users similarly and insert their profile rows.
+- Create a Supabase Auth user.
+- Insert a row into public.profiles with role='admin' for that user_id.
+- Repeat for HR and Employee users.
 
 Auto-create profiles on first login
-- If SUPABASE_SERVICE_ROLE_KEY is set, the backend will automatically create a default profile (role=employee, onboarding_complete=false) for any authenticated user missing a profile on their first request. This unblocks onboarding for first-time users.
-- For admin/HR, you should still promote their role via /users endpoints or manual SQL.
+- With SUPABASE_SERVICE_ROLE_KEY set, backend creates a default profile (role=employee, onboarding_complete=false) for new users on first request.
 
 5) Security
 - Keep .env out of version control.
 - Never commit real Supabase keys or JWT secrets.
-- Buckets are private; serve content through signed URLs.
 
 ## CORS and Auth Integration
 
-- Ensure FRONTEND_URL and CORS_ORIGINS are set to your frontend origin(s).
+- FRONTEND_URL and CORS_ORIGINS must include your frontend origin(s).
   - Local: FRONTEND_URL=http://localhost:3000
-  - Multiple origins allowed via CORS_ORIGINS comma-separated list.
-  - Include both localhost and your preview host/port.
-  - For Kavia preview/E2E, include (update the numeric id to match your preview):
+  - Multiple origins allowed via comma-separated CORS_ORIGINS.
+  - For Kavia preview/E2E (update numeric id accordingly):
     - https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3000 (frontend)
     - https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3001 (backend)
     - https://beta.kavia.ai (if applicable)
   Example:
     CORS_ORIGINS=http://localhost:3000,https://beta.kavia.ai,https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3000
 
-- To allow embedding /docs in an iframe from those hosts, set:
+- Allow embedding /docs:
   DOCS_FRAME_ANCESTORS='self' https://beta.kavia.ai https://vscode-internal-12349-beta.beta01.cloud.kavia.ai:3000
-- The frontend forwards Authorization: Bearer <supabase_jwt> on every API call.
-- Backend validates JWT using SUPABASE_JWT_SECRET when set, or falls back to unverified decode in dev.
+
+- Frontend forwards Authorization: Bearer <supabase_jwt> for every API call.
+- Backend validates JWT with SUPABASE_JWT_SECRET.
 
 ## Development
 
 Backend location: corporate-learning-hub-225521/lms_backend
 
-Run backend locally (example):
-- Create and populate lms_backend/.env (see .env.example)
+Run backend locally:
 - python -m venv .venv && source .venv/bin/activate
 - pip install -r requirements.txt
-- python run.py  # serves on http://localhost:${PORT:-3011}
+- python run.py  # http://localhost:${PORT:-3011}
 
 Port already in use?
-- If you see "Port 3011 is in use", another instance is already running (e.g., container or prior process).
-  - Either stop the other process or set a different PORT in lms_backend/.env (e.g., PORT=3012) before running.
-  - In production, use a WSGI server: e.g., `gunicorn -w 2 -b 0.0.0.0:${PORT:-3011} wsgi:application`
+- If you see "Port 3011 is in use", either stop the other process or set a different PORT in lms_backend/.env (e.g., PORT=3012).
+- Prod: `gunicorn -w 2 -b 0.0.0.0:${PORT:-3011} wsgi:application`
 
-API docs (Swagger UI) are served under /docs.
-OpenAPI JSON is available at /openapi.json.
-Health check remains at GET / returning {"message":"Healthy"}.
-Default dev port: 3011 (override via PORT environment variable).
+API docs at /docs, OpenAPI JSON at /openapi.json, health at GET /.
 
 OpenAPI regeneration:
-- The spec is generated from the Flask-Smorest setup. To update the interfaces/openapi.json file locally, run:
-  python generate_openapi.py from the lms_backend directory. This writes the refreshed spec to lms_backend/interfaces/openapi.json.
+- From lms_backend: `python generate_openapi.py` to update interfaces/openapi.json.
 
-Analytics summary response:
-- GET /analytics/summary (admin/hr) returns:
-  { "users": <int>, "lessons": <int>, "quizzes": <int>, "assignments": <int>, "quiz_submissions": <int> }
+Analytics summary response (admin/hr):
+- GET /analytics/summary → { users, lessons, quizzes, assignments, quiz_submissions }.
 
-## Quick E2E sanity (manual)
+## End-to-End Verification Steps
 
-1) Start backend on http://localhost:3011 and frontend on http://localhost:3000 (ensure frontend uses REACT_APP_API_BASE_URL=http://localhost:3011)
-2) Login via frontend (Supabase email/password)
-3) Onboarding page: submit full_name and department
-4) Role dashboard loads (admin/hr/employee)
-5) As admin/hr, create a lesson (Lessons page) and an assignment via API (Assignments endpoint) if needed
-6) As employee, open assigned lesson and take a quiz; submit to /quizzes/{id}/submit
-7) As hr/admin, open Analytics page; verify /analytics/summary responds
+1) Start backend (http://localhost:3011) and frontend (http://localhost:3000).
+   - Frontend must have REACT_APP_API_BASE_URL=http://localhost:3011 via .env or public/env.js.
+2) Login: use Supabase email/password for a user that exists in auth.
+3) Onboarding: fill full_name and department; POST /auth/onboarding/complete.
+4) Role routing:
+   - Admin → DashboardAdmin
+   - HR → DashboardHR
+   - Employee → DashboardEmployee
+5) Admin/HR:
+   - Lessons: create/list via UI → verifies /lessons POST/GET.
+   - Quizzes: create/list via UI → verifies /quizzes POST/GET.
+   - Assignments: create via /assignments (UI or via API client).
+6) Employee:
+   - View assigned items; take quiz; submit to /quizzes/{id}/submit.
+7) Analytics:
+   - HR/Admin open Analytics page; verify /analytics/summary returns counts.
+
+## Troubleshooting
+
+- 401/403 from API:
+  - Ensure frontend sends Authorization header (user is logged in).
+  - Check SUPABASE_JWT_SECRET matches your Supabase JWT secret.
+- CORS error in browser:
+  - Add your frontend origin to CORS_ORIGINS and restart backend.
+  - Verify protocol, host, and port match exactly.
+- /docs not visible in iframe:
+  - Ensure DOCS_FRAME_ANCESTORS includes the embedding origin.
+- Profile not found after login:
+  - Confirm SUPABASE_SERVICE_ROLE_KEY is set for auto-create, or manually insert profile row.
+- 500 errors on Supabase calls:
+  - Verify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are populated and valid.
